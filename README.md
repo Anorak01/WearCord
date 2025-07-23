@@ -9,18 +9,18 @@ Definitely don't use it to learn.
 If we forget about that, its pretty usable for just quickly checking messages in your dms and guilds.
 
 ### Supports:
-Displaying dms, guilds (their channels) and messages inside channels
-Messages are displayed as they are, no gif/emoji support, no replies, only text and images are supported.
+- Displaying dms, guilds (their channels) and messages inside channels.
+- Messages are displayed as they are, no gif/emoji support, no replies, only text and images are supported.
 
 
 ### Plans:
-I plan to eventually get most of messages - gif/emoji support, proper replies, links(not sure about those yet).
-Fix to guild channel sorting will come as well.
-Improvements to the UI.
+- I plan to eventually get most of messages - gif/emoji support, proper replies, links(not sure about those yet).
+- Fix to guild channel sorting will come as well.
+- Improvements to the UI.
 
 
 ### Mentions:
-    Project makes use of [DiscordQrAuthLib](https://github.com/0x3C50/DiscordQrAuthLib) for its QR code auth
+Project makes use of [DiscordQrAuthLib](https://github.com/0x3C50/DiscordQrAuthLib) for its QR code auth
 
 
 ## Disclaimer:
