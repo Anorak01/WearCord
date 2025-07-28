@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,6 +65,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.NavHostController
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumnDefaults
+import androidx.wear.compose.foundation.lazy.ScalingLazyListState
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.Button
@@ -112,8 +114,10 @@ class MainActivity : ComponentActivity() {
 
 suspend fun fetchMessages(
     channelId: String = "1377655291490996335",
-    messagesBeforeId: String = ""
+    messagesBeforeId: String = "",
+    messageLimit: Int = 50
 ): List<Message> = withContext(Dispatchers.IO) {
+    if (messageLimit <= 0 || messageLimit > 100) return@withContext emptyList()
     val client = OkHttpClient()
     var url = "https://discord.com/api/v9/channels/$channelId/messages?limit=50"
     if (messagesBeforeId.isNotEmpty()) {
@@ -945,10 +949,22 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                             }
                             if (message.type == 19) {
                                 Text(
-                                    text = "Replies are not supported",
+                                    text = "Reply: Jump to message",
                                     color = Color.Black,
                                     modifier = Modifier
                                         //.align(Alignment.CenterStart)
+                                        .clickable {
+                                            scope.launch {
+                                                if (message.message_reference != null) {
+                                                    jumpToMessage(
+                                                        channelId,
+                                                        message.message_reference.message_id,
+                                                        listState,
+                                                        messages
+                                                    )
+                                                }
+                                            }
+                                        }
                                         .padding(start = 0.dp), // Explicitly no padding
                                     textAlign = TextAlign.Start,
                                     fontSize = TextUnit(8.0f, TextUnitType.Sp),
@@ -1090,6 +1106,47 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
             }
         }
     }
+}
+
+suspend fun jumpToMessage(
+    channelID: String,
+    messageID: String,
+    listState: ScalingLazyListState,
+    messageList: SnapshotStateList<Message>
+): Boolean {
+    // 1. check if message is already in message list, if yes jump to it and return
+    // 2. check if message really exists /channels/<id>/messages/<id>, if no, return with error
+    // 3. fetch next 100 messages, check if id in them
+    // 4. add to message list
+    // 5. if message in newly fetched, jump to it and return, else jump to 3.
+
+    var iterLimit = 50 // max 50 iterations of while to prevent while(true) == 5k messages limit
+    var message = messageList.isMessageInList(messageID)
+    while (message == null) { // if message is already there, scroll to it
+        if (iterLimit == 0) return false // not successful
+
+        val result = fetchMessages(
+            channelId = channelID,
+            messagesBeforeId = messageList[messageList.size - 1].id,
+            100
+        )
+        messageList.addAll(result)
+
+        message = messageList.isMessageInList(messageID)
+
+        iterLimit--
+    }
+    // message found, jump to it
+    listState.animateScrollToItem(messageList.getMessageIndex(message))
+    return true // for success
+}
+
+fun SnapshotStateList<Message>.isMessageInList(messageID: String): Message? {
+    return this.find { it.id == messageID }
+}
+
+fun SnapshotStateList<Message>.getMessageIndex(message: Message): Int {
+    return this.indexOf(message)
 }
 
 enum class QRState {

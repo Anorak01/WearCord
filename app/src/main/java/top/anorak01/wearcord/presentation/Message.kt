@@ -6,18 +6,27 @@ import kotlinx.serialization.Serializable
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class Message (
+data class Message(
     val id: String,
     val content: String,
     val author: Author,
     val type: Int,
     val flags: Int,
     val attachments: List<Attachment> = emptyList(),
+    val message_reference: MessageReference? = null
 )
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class Guild (
+data class MessageReference(
+    val type: Int,
+    val channel_id: String,
+    val message_id: String
+)
+
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
+data class Guild(
     val id: String,
     val name: String,
     val icon: String?
@@ -25,7 +34,7 @@ data class Guild (
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class Channel (
+data class Channel(
     val id: String,
     var name: String? = null,
     val type: Int,
@@ -38,7 +47,7 @@ data class Channel (
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class Author (
+data class Author(
     val id: String,
     val username: String,
     val global_name: String? = null,
@@ -47,7 +56,7 @@ data class Author (
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class Attachment (
+data class Attachment(
     val id: String,
     val filename: String,
     val size: Int,
@@ -57,7 +66,7 @@ data class Attachment (
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class Me (
+data class Me(
     val id: String,
     val username: String,
     val avatar: String?,
@@ -66,7 +75,7 @@ data class Me (
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class LoginReply (
+data class LoginReply(
     val user_id: String,
     val mfa: Boolean,
     val ticket: String, // the token itself
@@ -75,6 +84,6 @@ data class LoginReply (
 
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
-data class MFAReply (
+data class MFAReply(
     val token: String,
 )
