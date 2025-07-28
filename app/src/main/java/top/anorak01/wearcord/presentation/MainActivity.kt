@@ -18,6 +18,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +33,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -109,7 +110,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-suspend fun fetchMessages(channelId: String = "1377655291490996335", messagesBeforeId: String = ""): List<Message> = withContext(Dispatchers.IO) {
+suspend fun fetchMessages(
+    channelId: String = "1377655291490996335",
+    messagesBeforeId: String = ""
+): List<Message> = withContext(Dispatchers.IO) {
     val client = OkHttpClient()
     var url = "https://discord.com/api/v9/channels/$channelId/messages?limit=50"
     if (messagesBeforeId.isNotEmpty()) {
@@ -117,8 +121,12 @@ suspend fun fetchMessages(channelId: String = "1377655291490996335", messagesBef
     }
     val request = Request.Builder()
         .url(url)
-        .headers(Headers.headersOf("Authorization",
-            "$userToken"))
+        .headers(
+            Headers.headersOf(
+                "Authorization",
+                "$userToken"
+            )
+        )
         .build()
 
     println("request built")
@@ -136,7 +144,7 @@ suspend fun fetchMessages(channelId: String = "1377655291490996335", messagesBef
         println(body)
         if (body.isBlank()) return@withContext emptyList()
 
-        val json = Json {ignoreUnknownKeys=true}
+        val json = Json { ignoreUnknownKeys = true }
 
         val msgs = json.decodeFromString<List<Message>>(body)
 
@@ -180,55 +188,56 @@ suspend fun fetchGuilds(): List<Guild> = withContext(Dispatchers.IO) {
     }
 }
 
-suspend fun fetchGuildChannels(guildId: String): Map<String, MutableList<Channel>> = withContext(Dispatchers.IO) {
-    val client = OkHttpClient()
-    val url = "https://discord.com/api/v9/guilds/$guildId/channels"
-    val request = Request.Builder()
-        .url(url)
-        .headers(
-            Headers.headersOf(
-                "Authorization",
-                "$userToken"
+suspend fun fetchGuildChannels(guildId: String): Map<String, MutableList<Channel>> =
+    withContext(Dispatchers.IO) {
+        val client = OkHttpClient()
+        val url = "https://discord.com/api/v9/guilds/$guildId/channels"
+        val request = Request.Builder()
+            .url(url)
+            .headers(
+                Headers.headersOf(
+                    "Authorization",
+                    "$userToken"
+                )
             )
-        )
-        .build()
+            .build()
 
-    println("request built")
-    client.newCall(request).execute().use { response ->
-        if (response.code != 200) {
-            println("Request failed with code ${response.code}")
-            println(response.body.string())
-            println(response.headers)
-            return@withContext emptyMap()
-        }
-
-        println("Request succeeded")
-
-        val body = response.body.string()
-        println(body)
-        if (body.isBlank()) return@withContext emptyMap()
-
-        val json = Json { ignoreUnknownKeys = true }
-
-        var channels = json.decodeFromString<List<Channel>>(body)
-        // parse the guilds, now preprocess them into expected nested list based on parent
-
-        // sort them by position
-        channels = channels.sortedBy { it.position }
-
-        // make them a nested list/tree where parent is channel without parent_id and children are channels with the same parent_id
-        val channelsMap = mutableMapOf<String, MutableList<Channel>>()
-        for (channel in channels) {
-            if (channel.parent_id == null) {
-                channelsMap[channel.id] = mutableListOf()
-            } else {
-                channelsMap[channel.parent_id]?.add(channel)
+        println("request built")
+        client.newCall(request).execute().use { response ->
+            if (response.code != 200) {
+                println("Request failed with code ${response.code}")
+                println(response.body.string())
+                println(response.headers)
+                return@withContext emptyMap()
             }
-        }
 
-        return@withContext channelsMap
+            println("Request succeeded")
+
+            val body = response.body.string()
+            println(body)
+            if (body.isBlank()) return@withContext emptyMap()
+
+            val json = Json { ignoreUnknownKeys = true }
+
+            var channels = json.decodeFromString<List<Channel>>(body)
+            // parse the guilds, now preprocess them into expected nested list based on parent
+
+            // sort them by position
+            channels = channels.sortedBy { it.position }
+
+            // make them a nested list/tree where parent is channel without parent_id and children are channels with the same parent_id
+            val channelsMap = mutableMapOf<String, MutableList<Channel>>()
+            for (channel in channels) {
+                if (channel.parent_id == null) {
+                    channelsMap[channel.id] = mutableListOf()
+                } else {
+                    channelsMap[channel.parent_id]?.add(channel)
+                }
+            }
+
+            return@withContext channelsMap
+        }
     }
-}
 
 /**
  * Returns *sorted* list of dms
@@ -266,7 +275,8 @@ suspend fun fetchDms(): List<Channel> = withContext(Dispatchers.IO) {
         var channels = json.decodeFromString<List<Channel>>(body)
 
         channels.forEach { channel ->
-            if (channel.recipients.isNotEmpty()) channel.name = channel.recipients[0].global_name ?: channel.recipients[0].username
+            if (channel.recipients.isNotEmpty()) channel.name =
+                channel.recipients[0].global_name ?: channel.recipients[0].username
         }
 
         channels = channels.sortedBy { toTimestamp(it.last_message_id ?: it.id) }.reversed()
@@ -332,9 +342,9 @@ var me: Me? = null
 @Composable
 fun WearApp(greetingName: String) {
     // load stored user token
-    val sharedPreferences = LocalContext.current.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
+    val sharedPreferences =
+        LocalContext.current.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
     userToken = sharedPreferences.getString("user_token", "")
-
 
 
     // do something to verify it works, maybe fetch something, probably @me endpoint
@@ -357,10 +367,10 @@ fun WearApp(greetingName: String) {
 
     val navController = rememberSwipeDismissableNavController()
     SwipeDismissableNavHost(navController = navController, startDestination = "home") {
-        composable("home") {Greeting(navController, myName, false)}
-        composable("guilds") {GuildScreen(navController)}
-        composable("dms") {DMScreen(navController)}
-        composable("login") {LoginScreen(navController)}
+        composable("home") { Greeting(navController, myName, false) }
+        composable("guilds") { GuildScreen(navController) }
+        composable("dms") { DMScreen(navController) }
+        composable("login") { LoginScreen(navController) }
         composable("qr") { QRScreen(navController) }
         composable("manualtoken") { ManualTokenScreen(navController) }
         composable("channels/{guildId}") { backStackEntry ->
@@ -418,10 +428,12 @@ fun WearApp(greetingName: String) {
                             isDrawerOpen = false
                         })
                     }
-                    item { Text("Guilds", color = Color.White, modifier = Modifier.clickable {
-                        navController.navigate("guilds")
-                        isDrawerOpen = false
-                    }) }
+                    item {
+                        Text("Guilds", color = Color.White, modifier = Modifier.clickable {
+                            navController.navigate("guilds")
+                            isDrawerOpen = false
+                        })
+                    }
                     item {
                         Text(
                             "Shutdown", color = Color.Green,
@@ -512,9 +524,11 @@ fun ChannelScreen(navController: NavHostController, guildId: String) {
             }
         }
     }
-    Box(contentAlignment = Alignment.TopCenter, modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()) {
+    Box(
+        contentAlignment = Alignment.TopCenter, modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
         Button(
             onClick = {
                 println("clicked")
@@ -533,9 +547,11 @@ fun ChannelScreen(navController: NavHostController, guildId: String) {
         )
     }
 
-    Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()) {
+    Box(
+        contentAlignment = Alignment.BottomCenter, modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
         Button(
             onClick = {
                 scope.launch {
@@ -551,6 +567,7 @@ fun ChannelScreen(navController: NavHostController, guildId: String) {
 }
 
 val guilds = mutableStateListOf<Guild>()
+
 @Composable
 fun GuildScreen(navController: NavHostController) {
     val scope = rememberCoroutineScope()
@@ -630,9 +647,11 @@ fun GuildScreen(navController: NavHostController) {
             }
         }
     }
-    Box(contentAlignment = Alignment.TopCenter, modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()) {
+    Box(
+        contentAlignment = Alignment.TopCenter, modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
         Button(
             onClick = {
                 println("clicked")
@@ -650,9 +669,11 @@ fun GuildScreen(navController: NavHostController) {
         )
     }
 
-    Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()) {
+    Box(
+        contentAlignment = Alignment.BottomCenter, modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
         Button(
             onClick = {
                 scope.launch {
@@ -751,9 +772,11 @@ fun DMScreen(navController: NavHostController) {
             }
         }
     }
-    Box(contentAlignment = Alignment.TopCenter, modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()) {
+    Box(
+        contentAlignment = Alignment.TopCenter, modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
         Button(
             onClick = {
                 println("clicked")
@@ -771,9 +794,11 @@ fun DMScreen(navController: NavHostController) {
         )
     }
 
-    Box(contentAlignment = Alignment.BottomCenter, modifier = Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()) {
+    Box(
+        contentAlignment = Alignment.BottomCenter, modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
         Button(
             onClick = {
                 scope.launch {
@@ -797,7 +822,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
     val listState = rememberScalingLazyListState()
 
     val isAtTop by remember {
-        derivedStateOf { listState.centerItemIndex >= messages.size-1 }
+        derivedStateOf { listState.centerItemIndex >= messages.size - 1 }
     }
 
     var newMessageText by remember { mutableStateOf("") }
@@ -847,9 +872,17 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color.Gray)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onLongPress = {
+                                        println("long pressed")
+                                    }
+                                )
+                            }
                             .padding(horizontal = 4.dp),
                         //.padding(vertical = 0.dp),  // Only vertical spacing, no horizontal padding
                         contentAlignment = Alignment.CenterStart,
+
 
                         ) {
                         Column {
@@ -862,7 +895,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                                 textAlign = TextAlign.Start,
                                 fontSize = TextUnit(14.0f, TextUnitType.Sp),
                             )
-                            Text(
+                            /*Text(
                                 text = message.content,
                                 color = Color.White,
                                 modifier = Modifier
@@ -870,7 +903,8 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                                     .padding(start = 0.dp), // Explicitly no padding
                                 textAlign = TextAlign.Start,
                                 fontSize = TextUnit(14.0f, TextUnitType.Sp),
-                            )
+                            )*/
+                            RichText(message.content)
                             if (message.attachments.isNotEmpty()) {
                                 message.attachments.forEach { attachment ->
                                     // For now, let's assume all attachments are images
@@ -919,6 +953,12 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                                     textAlign = TextAlign.Start,
                                     fontSize = TextUnit(8.0f, TextUnitType.Sp),
                                 )
+                                // add actual reply handling
+                                // 1. check if message is already in message list, if yes jump to it and return
+                                // 2. check if message really exists /channels/<id>/messages/<id>, if no, return with error
+                                // 3. fetch next 100 messages, check if id in them
+                                // 4. add to message list
+                                // 5. if message in newly fetched, jump to it and return, else jump to 3.
                             } else if (message.type != 0 || message.flags != 0) {
                                 Text(
                                     text = "Part of this message is not supported",
@@ -938,34 +978,37 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
     }
     Box(contentAlignment = Alignment.TopCenter, modifier = Modifier.fillMaxSize()) {
         Row {
-                Button(
-                    onClick = {
-                        println("clicked")
-                        scope.launch {
-                            val result = fetchMessages(channelId = channelId)
-                            messages.clear()
-                            messages.addAll(result)
-                            println("fetched messages")
-                        }
+            var reloadEnabled by remember { mutableStateOf(true) }
+            Button(
+                onClick = {
+                    println("clicked")
+                    scope.launch {
+                        reloadEnabled = false
+                        val result = fetchMessages(channelId = channelId)
+                        messages.clear()
+                        messages.addAll(result)
+                        println("fetched messages")
+                        reloadEnabled = true
+                    }
 
-                    },
-                    content = { Text("R") },
-                    modifier = Modifier.fillMaxSize(0.15f)
-
-                )
+                },
+                content = { Text("R") },
+                modifier = Modifier.fillMaxSize(0.15f),
+                enabled = reloadEnabled
+            )
 
 
             Button(
-                    onClick = {
-                        scope.launch {
-                            listState.animateScrollToItem(0, 1)
-                        }
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem(0, 1)
+                    }
 
-                    },
-                    content = { Text("D") },
-                    modifier = Modifier.fillMaxSize(0.15f)
+                },
+                content = { Text("D") },
+                modifier = Modifier.fillMaxSize(0.15f)
 
-                )
+            )
         }
     }
 
@@ -975,7 +1018,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
         contentAlignment = Alignment.BottomCenter
     ) {
 // Input field and Send Button - Bottom
-        var buttonEnabled by remember {mutableStateOf(true)}
+        var buttonEnabled by remember { mutableStateOf(true) }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1108,6 +1151,7 @@ fun QRScreen(navController: NavHostController) {
                 Text("Waiting for QR code")
             }
         }
+
         QRState.QRScan -> {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Column {
@@ -1125,12 +1169,14 @@ fun QRScreen(navController: NavHostController) {
                 }
             }
         }
+
         QRState.QRLogin -> {
             // e
         }
 
     }
 }
+
 fun generateQrCodeBitmap(text: String, width: Int = 512, height: Int = 512): Bitmap? {
     if (text.isBlank()) return null
     return try {
@@ -1217,7 +1263,10 @@ fun LoginScreen(navController: NavHostController) {
 
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { // bounding box
-        Column(modifier = Modifier.fillMaxSize(0.8f), horizontalAlignment = Alignment.CenterHorizontally) { // column for text entries and login button below
+        Column(
+            modifier = Modifier.fillMaxSize(0.8f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) { // column for text entries and login button below
             // mail entry
             Box(
                 modifier = Modifier
@@ -1299,7 +1348,10 @@ fun MFAScreen(navController: NavHostController, ticket: String) {
     val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { // bounding box
-        Column(modifier = Modifier.fillMaxSize(0.8f), horizontalAlignment = Alignment.CenterHorizontally) { // column for text entries and login button below
+        Column(
+            modifier = Modifier.fillMaxSize(0.8f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) { // column for text entries and login button below
             // code entry
             Box(
                 modifier = Modifier
@@ -1350,7 +1402,7 @@ fun saveToken(context: Context, token: String) {
     userToken = token
 
     val sharedPreferences = context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
-    sharedPreferences.edit { putString("user_token", userToken)}
+    sharedPreferences.edit { putString("user_token", userToken) }
 }
 
 suspend fun sendMessage(channelId: String, content: String): Boolean {
@@ -1444,7 +1496,7 @@ suspend fun sendLogin(email: String, password: String): Pair<String?, Boolean> {
 
         if (body.isBlank()) return Pair(null, false)
 
-        val json = Json { ignoreUnknownKeys = true}
+        val json = Json { ignoreUnknownKeys = true }
 
         var parsedBody: LoginReply? = null
         try {
@@ -1513,7 +1565,7 @@ suspend fun send2FA(ticket: String, code: String): String? {
 
         if (body.isBlank()) return null
 
-        val json = Json { ignoreUnknownKeys = true}
+        val json = Json { ignoreUnknownKeys = true }
 
         var parsedBody: MFAReply? = null
         try {
@@ -1533,13 +1585,14 @@ suspend fun send2FA(ticket: String, code: String): String? {
 
 @Composable
 fun Greeting(navController: NavHostController, greetingName: String, isOpen: Boolean) {
-    var welcomeText by remember {mutableStateOf("")}
+    var welcomeText by remember { mutableStateOf("") }
 
     welcomeText = stringResource(R.string.hello_world, "")
 
-    SwipeToDismissBox(onDismissed = {},
+    SwipeToDismissBox(
+        onDismissed = {},
         modifier = Modifier.fillMaxSize()
-        ) {
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
