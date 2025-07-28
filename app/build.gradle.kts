@@ -80,5 +80,5 @@ dependencies {
 
     implementation(libs.core)
 
-//    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
+    implementation(libs.coil.gif)
 }
