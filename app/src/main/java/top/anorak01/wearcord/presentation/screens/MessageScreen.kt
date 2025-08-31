@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.anorak01.wearcord.presentation.Message
 import top.anorak01.wearcord.presentation.RichText
+import top.anorak01.wearcord.presentation.components.FullScreenImageView
 import top.anorak01.wearcord.presentation.fetchers.fetchMessages
 import top.anorak01.wearcord.presentation.message.jumpToMessage
 import top.anorak01.wearcord.presentation.message.sendMessage
@@ -67,6 +68,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
     }
 
     var newMessageText by remember { mutableStateOf("") }
+    var fullScreenImageUrl by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val result = fetchMessages(channelId = channelId)
@@ -163,7 +165,10 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .heightIn(max = 150.dp) // Max height for image
-                                                .clip(RoundedCornerShape(CornerSize(6.dp))),
+                                                .clip(RoundedCornerShape(CornerSize(6.dp)))
+                                                .clickable {
+                                                    fullScreenImageUrl = attachment.url
+                                                }, // Open image in full screen
                                             contentScale = ContentScale.Fit // Or ContentScale.Crop
                                         )
                                         Text( // Optional: display filename
@@ -341,6 +346,13 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
             ) {
                 Text("Send")
             }
+        }
+    }
+
+    // Full Screen Image Viewer
+    fullScreenImageUrl?.let {
+        FullScreenImageView(imageUrl = it) {
+            fullScreenImageUrl = null // Dismiss the dialog
         }
     }
 }
