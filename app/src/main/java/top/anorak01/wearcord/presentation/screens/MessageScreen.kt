@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -67,7 +68,7 @@ import top.anorak01.wearcord.presentation.message.messageComposerStore
 import top.anorak01.wearcord.presentation.network.ApiResult
 
 private const val MESSAGE_PAGE_SIZE = 50
-private const val FIRST_MESSAGE_ITEM_INDEX = 0
+private const val FIRST_MESSAGE_ITEM_INDEX = 1
 
 @Composable
 fun MessageScreen(navController: NavHostController, channelId: String) {
@@ -107,7 +108,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                 messages.clear()
                 messages.addAll(result.data)
                 hasMoreMessages = result.data.size == MESSAGE_PAGE_SIZE
-                listState.scrollToItem(0)
+                jumpToLatestMessage(listState, composerSpacePx)
             }
             is ApiResult.Failure -> requestFailure = result
         }
@@ -169,6 +170,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                 reverseLayout = true,
                 contentPadding = PaddingValues(start = 8.dp, top = 28.dp, end = 8.dp, bottom = composerSpace),
             ) {
+                item(key = "latest_bottom_anchor") {}
                 if (isRefreshing && messages.isEmpty()) item { LoadingState("Loading messages…") }
                 if (!isRefreshing && messages.isEmpty() && requestFailure == null) {
                     item { EmptyState("No messages yet", "Start the conversation from this channel.") }
@@ -215,15 +217,6 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                 item { ScreenHeader("Messages") }
             }
 
-            if (isScrolledUp) {
-                CompactChip(
-                    onClick = { scope.launch { jumpToLatestMessage(listState, composerSpacePx) } },
-                    label = { Text("↓ Latest") },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = composerSpace),
-                )
-            }
 
             Column(
                 modifier = Modifier
@@ -248,9 +241,20 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (isScrolledUp) {
+                        Button(
+                            onClick = { scope.launch { jumpToLatestMessage(listState, composerSpacePx) } },
+                            modifier = Modifier.size(56.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Jump to latest",
+                            )
+                        }
+                    }
                     Button(
                         onClick = { navController.navigate("compose/$channelId") },
                         modifier = Modifier.size(56.dp),

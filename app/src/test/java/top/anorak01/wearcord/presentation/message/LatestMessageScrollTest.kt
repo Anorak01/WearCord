@@ -5,16 +5,18 @@ import org.junit.Test
 
 class LatestMessageScrollTest {
     @Test
-    fun latestMessageBottomIsAlignedAboveComposerForDifferentMessageHeights() {
+    fun latestAnchorIsPositionedAtTheBottomOfVisibleContent() {
         val viewport = 480
         val composer = 100
 
-        for (messageHeight in listOf(80, 220, 400)) {
-            val offset = latestMessageScrollOffset(viewport, composer, messageHeight)
-            val itemCenter = viewport / 2 + offset
-            val itemBottom = itemCenter + messageHeight / 2
+        val offset = latestAnchorScrollOffset(viewport, composer)
+        val anchorPosition = viewport / 2 + offset
 
-            assertEquals(viewport - composer, itemBottom)
-        }
+        assertEquals(viewport - composer, anchorPosition)
+    }
+
+    @Test
+    fun latestAnchorDoesNotRequireMessageMeasurement() {
+        assertEquals(240, latestAnchorScrollOffset(viewportHeight = 480, bottomBarHeight = 0))
     }
 }

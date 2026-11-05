@@ -2,26 +2,21 @@ package top.anorak01.wearcord.presentation.message
 
 import androidx.wear.compose.foundation.lazy.ScalingLazyListState
 
-internal fun latestMessageScrollOffset(
-    viewportHeight: Int,
-    bottomBarHeight: Int,
-    messageHeight: Int,
-): Int = viewportHeight - bottomBarHeight - (messageHeight / 2) - (viewportHeight / 2)
+internal const val LATEST_ANCHOR_ITEM_INDEX = 0
+
+internal fun latestAnchorScrollOffset(viewportHeight: Int, bottomBarHeight: Int): Int =
+    (viewportHeight / 2) - bottomBarHeight
 
 internal suspend fun jumpToLatestMessage(
     listState: ScalingLazyListState,
     bottomBarHeight: Int,
 ) {
-    // First measure the latest item, then align its bottom above the composer.
-    listState.scrollToItem(0)
-    val layout = listState.layoutInfo
-    val latestItem = layout.visibleItemsInfo.firstOrNull { it.index == 0 } ?: return
+    // Item zero is a zero-height marker at the end of the newest message.
     listState.animateScrollToItem(
-        index = 0,
-        scrollOffset = latestMessageScrollOffset(
-            viewportHeight = layout.viewportSize.height,
+        index = LATEST_ANCHOR_ITEM_INDEX,
+        scrollOffset = latestAnchorScrollOffset(
+            viewportHeight = listState.layoutInfo.viewportSize.height,
             bottomBarHeight = bottomBarHeight,
-            messageHeight = latestItem.size,
         ),
     )
 }

@@ -51,7 +51,12 @@ fun WearListScaffold(
     Scaffold(
         timeText = { TimeText() },
         vignette = { Vignette(vignettePosition = VignettePosition.TopAndBottom) },
-        positionIndicator = { PositionIndicator(scalingLazyListState = listState) },
+        positionIndicator = {
+            PositionIndicator(
+                scalingLazyListState = listState,
+                reverseDirection = reverseLayout,
+            )
+        },
     ) {
         ScalingLazyColumn(
             modifier = modifier
