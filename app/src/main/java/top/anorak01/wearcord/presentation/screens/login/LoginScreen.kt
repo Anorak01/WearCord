@@ -1,7 +1,8 @@
 package top.anorak01.wearcord.presentation.screens.login
 
+import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,97 +22,80 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
-import androidx.wear.compose.material.Text
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import top.anorak01.wearcord.presentation.components.RequestError
 import top.anorak01.wearcord.presentation.login.sendLogin
+import top.anorak01.wearcord.presentation.me
+import top.anorak01.wearcord.presentation.network.ApiResult
 import top.anorak01.wearcord.presentation.saveToken
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavHostController) {
     val scope = rememberCoroutineScope()
-
-    var newLoginText by remember { mutableStateOf("") }
-
-    var newPasswordText by remember { mutableStateOf("") }
-
     val context = LocalContext.current
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
 
-
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { // bounding box
-        Column(
-            modifier = Modifier.fillMaxSize(0.8f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { // column for text entries and login button below
-            // mail entry
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colors.background) // Add a background to overlay content
-                    .padding(horizontal = 16.dp, vertical = 3.dp)
-            ) {
-                TextField( // Using OutlinedTextField for better visibility on Wear
-                    value = newLoginText,
-                    onValueChange = { newLoginText = it },
-                    label = { Text("Email") },
-                    maxLines = 1 // Allow for multi-line input
-                )
-            }
-
-            // password entry
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colors.background) // Add a background to overlay content
-                    .padding(horizontal = 16.dp, vertical = 3.dp)
-            ) {
-                TextField( // Using OutlinedTextField for better visibility on Wear
-                    value = newPasswordText,
-                    onValueChange = { newPasswordText = it },
-                    label = { Text("Password") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    maxLines = 1 // Allow for multi-line input
-                )
-            }
-
-
-            // login button
-            Button(
-                onClick = {
-                    if (newLoginText.isNotBlank() && newPasswordText.isNotBlank()) {
-                        scope.launch(Dispatchers.Main) {
-                            // Simulate sending and then refresh or update based on actual send result
-                            // For now, let's just clear and re-fetch as an example
-                            var token: Pair<String?, Boolean> = Pair(null, false)
-                            withContext(Dispatchers.IO) {
-                                token = sendLogin(
-                                    newLoginText,
-                                    newPasswordText
-                                ) // sendLogin automatically sets the user token if successful
-                            }
-                            if (!token.second) { // mfa not required
-                                newLoginText = ""
-                                newPasswordText = ""
-
-                                if (token.first != null && token.first?.isNotBlank() ?: false) {
-                                    saveToken(context, token.first!!)
-                                }
-
-                                // exit this view and go to home logged in
-                                navController.clearBackStack("home")
-                            } else {
-                                navController.navigate("mfa/${token.first}")
-                            }
-                        }
-
+    fun submitLogin() {
+        if (isLoading || email.isBlank() || password.isBlank()) return
+        scope.launch {
+            isLoading = true
+            failure = null
+            when (val result = sendLogin(email, password)) {
+                is ApiResult.Success -> {
+                    val login = result.data
+                    if (login.mfa) {
+                        navController.navigate("mfa/${Uri.encode(login.ticket)}")
+                    } else if (login.ticket.isNotBlank()) {
+                        saveToken(context, login.ticket)
+                        me = null
+                        email = ""
+                        password = ""
+                        navController.popBackStack("home", false)
+                    } else {
+                        failure = ApiResult.Failure(
+                            ApiResult.Reason.INVALID_RESPONSE,
+                            "Discord did not return a login token.",
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
-                enabled = newLoginText.isNotBlank() && newPasswordText.isNotBlank() // Disable button if text is empty
-            ) {
-                Text("Log In")
+                }
+                is ApiResult.Failure -> failure = result
             }
+            isLoading = false
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        TextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { androidx.wear.compose.material.Text("Email") },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            enabled = !isLoading,
+        )
+        TextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { androidx.wear.compose.material.Text("Password") },
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colors.background),
+            visualTransformation = PasswordVisualTransformation(),
+            maxLines = 1,
+            enabled = !isLoading,
+        )
+        failure?.let { RequestError(failure = it, onRetry = ::submitLogin) }
+        Button(
+            onClick = ::submitLogin,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
+        ) {
+            androidx.wear.compose.material.Text(if (isLoading) "Logging in…" else "Log In")
         }
     }
 }

@@ -8,74 +8,87 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.SwipeToDismissBox
 import androidx.wear.compose.material.Text
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import top.anorak01.wearcord.R
+import top.anorak01.wearcord.presentation.components.RequestError
 import top.anorak01.wearcord.presentation.fetchers.fetchMe
 import top.anorak01.wearcord.presentation.me
+import top.anorak01.wearcord.presentation.network.ApiResult
+import top.anorak01.wearcord.presentation.userToken
 
-
-@OptIn(DelicateCoroutinesApi::class)
 @Composable
-fun Greeting(navController: NavHostController, greetingName: String, isOpen: Boolean) {
-    var welcomeText by remember { mutableStateOf("") }
+fun Greeting(navController: NavHostController) {
+    var displayName by remember { mutableStateOf(me?.global_name ?: me?.username.orEmpty()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
+    var retryCount by remember { mutableIntStateOf(0) }
 
-    welcomeText = stringResource(R.string.hello_world, "")
+    LaunchedEffect(retryCount) {
+        val currentUser = me
+        if (currentUser != null) {
+            displayName = currentUser.global_name ?: currentUser.username
+            return@LaunchedEffect
+        }
+        if (userToken.isNullOrBlank()) {
+            navController.navigate("qr") { launchSingleTop = true }
+            return@LaunchedEffect
+        }
 
-    SwipeToDismissBox(
-        onDismissed = {},
-        modifier = Modifier.fillMaxSize()
-    ) {
+        isLoading = true
+        failure = null
+        when (val result = fetchMe()) {
+            is ApiResult.Success -> {
+                me = result.data
+                displayName = result.data.global_name ?: result.data.username
+            }
+            is ApiResult.Failure -> {
+                if (result.reason == ApiResult.Reason.UNAUTHORIZED) {
+                    navController.navigate("qr") { launchSingleTop = true }
+                } else {
+                    // Connectivity/server failures are retryable and must not log the user out.
+                    failure = result
+                }
+            }
+        }
+        isLoading = false
+    }
+
+    SwipeToDismissBox(onDismissed = {}, modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colors.primary,
-                text = welcomeText
-            )
-            Text(
                 text = "Welcome to WearCord",
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colors.primary,
             )
-
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        GlobalScope.launch {
-            if (me != null) {
-                welcomeText += me!!.global_name ?: ""
-                return@launch
+            if (displayName.isNotBlank()) {
+                Text(
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    text = displayName,
+                )
             }
-            me = fetchMe()
-            if (me == null) {
-                // if me not fetched, go to login screen
-                withContext(Dispatchers.Main) {
-                    navController.navigate("qr")
-                }
-            } else {
-                welcomeText += me!!.global_name ?: ""
+            if (isLoading) {
+                Text(
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    text = "Connecting to Discord…",
+                )
+            }
+            failure?.let {
+                RequestError(failure = it, onRetry = { retryCount++ })
             }
         }
     }

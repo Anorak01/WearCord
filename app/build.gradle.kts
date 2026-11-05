@@ -81,4 +81,7 @@ dependencies {
     implementation(libs.core)
 
     implementation(libs.coil.gif)
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver3:5.1.0")
 }

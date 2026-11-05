@@ -12,17 +12,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumnDefaults
@@ -33,72 +36,76 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import kotlinx.coroutines.launch
 import top.anorak01.wearcord.presentation.Channel
+import top.anorak01.wearcord.presentation.components.RequestError
 import top.anorak01.wearcord.presentation.fetchers.fetchGuildChannels
+import top.anorak01.wearcord.presentation.network.ApiResult
 
 @Composable
 fun ChannelScreen(navController: NavHostController, guildId: String) {
     val scope = rememberCoroutineScope()
-
     val channels = remember { mutableStateMapOf<String, List<Channel>>() }
-
     val listState = rememberScalingLazyListState()
+    var isLoading by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
+    var refreshCount by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        val result = fetchGuildChannels(guildId)
-        channels.clear()
-        channels.putAll(result)
-        println("fetched messages")
-        listState.animateScrollToItem(0, 1)
+    LaunchedEffect(guildId, refreshCount) {
+        isLoading = true
+        failure = null
+        when (val result = fetchGuildChannels(guildId)) {
+            is ApiResult.Success -> {
+                channels.clear()
+                channels.putAll(result.data)
+            }
+            is ApiResult.Failure -> failure = result
+        }
+        isLoading = false
     }
 
-
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colors.background),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colors.background),
+        contentAlignment = Alignment.Center,
     ) {
         ScalingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
-            reverseLayout = false, // To show newest message at bottom
+            reverseLayout = false,
             scalingParams = ScalingLazyColumnDefaults.scalingParams(
                 edgeScale = 0.5f,
                 edgeAlpha = 0.5f,
-                minTransitionArea = 0.4f
+                minTransitionArea = 0.4f,
             ),
-            contentPadding = PaddingValues(vertical = 70.dp)
+            contentPadding = PaddingValues(vertical = 70.dp),
         ) {
-            val parentChannels = channels.keys.toList()
-            items(parentChannels) { parentChannel ->
+            if (isLoading && channels.isEmpty()) item { Text("Loading channels…") }
+            failure?.let { error ->
+                item(key = "request_error") {
+                    RequestError(failure = error, onRetry = { refreshCount++ })
+                }
+            }
+            if (!isLoading && channels.isEmpty() && failure == null) item { Text("No channels found") }
+            items(channels.keys.toList(), key = { it }) { parentChannel ->
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color.Gray)
                         .padding(horizontal = 4.dp),
-                    //.padding(vertical = 0.dp),  // Only vertical spacing, no horizontal padding
                     contentAlignment = Alignment.Center,
-
-                    ) {
+                ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        val subChannels = channels[parentChannel]
-                        subChannels?.forEach { channel ->
+                        channels[parentChannel]?.forEach { channel ->
                             Text(
-                                text = channel.name ?: "",
+                                text = channel.name ?: "Channel",
                                 color = Color.White,
                                 modifier = Modifier
-                                    //.align(Alignment.CenterStart)
                                     .padding(2.dp)
                                     .background(Color.DarkGray)
-                                    .clickable {
-                                        navController.navigate("messages/${channel.id}")
-                                    },
+                                    .clickable { navController.navigate("messages/${channel.id}") },
                                 textAlign = TextAlign.Center,
-                                fontSize = TextUnit(14.0f, TextUnitType.Sp),
+                                fontSize = 14.sp,
                             )
                         }
                     }
@@ -107,43 +114,24 @@ fun ChannelScreen(navController: NavHostController, guildId: String) {
         }
     }
     Box(
-        contentAlignment = Alignment.TopCenter, modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
+        contentAlignment = Alignment.TopCenter,
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
     ) {
         Button(
-            onClick = {
-                println("clicked")
-                scope.launch {
-                    val result = fetchGuildChannels(guildId)
-                    channels.clear()
-                    channels.putAll(result)
-                    println("fetched channels")
-                    listState.animateScrollToItem(0, 1)
-                }
-
-            },
+            onClick = { refreshCount++ },
             content = { Text("R") },
-            modifier = Modifier.fillMaxSize(0.15f)
-
+            modifier = Modifier.fillMaxSize(0.15f),
+            enabled = !isLoading,
         )
     }
-
     Box(
-        contentAlignment = Alignment.BottomCenter, modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
+        contentAlignment = Alignment.BottomCenter,
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
     ) {
         Button(
-            onClick = {
-                scope.launch {
-                    listState.animateScrollToItem(0, 1)
-                }
-
-            },
+            onClick = { scope.launch { listState.animateScrollToItem(0, 1) } },
             content = { Text("D") },
-            modifier = Modifier.fillMaxSize(0.15f)
-
+            modifier = Modifier.fillMaxSize(0.15f),
         )
     }
 }

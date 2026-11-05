@@ -1,9 +1,10 @@
 package top.anorak01.wearcord.presentation.screens.login
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,62 +15,64 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.Text
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import top.anorak01.wearcord.presentation.components.RequestError
 import top.anorak01.wearcord.presentation.fetchers.fetchMe
+import top.anorak01.wearcord.presentation.me
+import top.anorak01.wearcord.presentation.network.ApiResult
 import top.anorak01.wearcord.presentation.saveToken
-import top.anorak01.wearcord.presentation.userToken
 
 @Composable
 fun ManualTokenScreen(navController: NavHostController) {
     val scope = rememberCoroutineScope()
-    var newTokenText by remember { mutableStateOf("") }
-
     val context = LocalContext.current
+    var token by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
 
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-        Column() {
-            Text("Manual token input")
-
-
-            TextField( // Using OutlinedTextField for better visibility on Wear
-                value = newTokenText,
-                onValueChange = { newTokenText = it },
-                label = { Text("Token") },
-                modifier = Modifier.fillMaxWidth(0.75f),
-
-                maxLines = 1 // Allow for multi-line input
-            )
-            Button(
-                onClick = {
-                    if (newTokenText.isNotBlank()) {
-                        scope.launch(Dispatchers.IO) {
-                            if (validateToken(newTokenText)) {
-                                withContext(Dispatchers.Main) {
-                                    println("success, going home")
-                                    userToken = newTokenText
-                                    saveToken(context, newTokenText)
-                                    navController.clearBackStack("home")
-                                    navController.navigate("home")
-                                }
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxSize(0.25f),
-                enabled = newTokenText.isNotBlank() // Disable button if text is empty
-            ) {
-                Text("Send")
+    fun submitToken() {
+        if (isLoading || token.isBlank()) return
+        scope.launch {
+            isLoading = true
+            failure = null
+            when (val result = fetchMe(token)) {
+                is ApiResult.Success -> {
+                    me = result.data
+                    saveToken(context, token)
+                    token = ""
+                    navController.popBackStack("home", false)
+                }
+                is ApiResult.Failure -> failure = result
             }
+            isLoading = false
         }
     }
 
-}
-
-fun validateToken(token: String): Boolean {
-    return fetchMe(token) != null
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Manual token input")
+        TextField(
+            value = token,
+            onValueChange = { token = it },
+            label = { Text("Token") },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            enabled = !isLoading,
+        )
+        failure?.let { RequestError(failure = it, onRetry = ::submitToken) }
+        Button(
+            onClick = ::submitToken,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && token.isNotBlank(),
+        ) {
+            Text(if (isLoading) "Validating…" else "Send")
+        }
+    }
 }

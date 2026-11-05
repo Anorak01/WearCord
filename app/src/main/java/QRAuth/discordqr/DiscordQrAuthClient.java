@@ -15,6 +15,7 @@ import java.security.spec.MGF1ParameterSpec;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -74,14 +75,22 @@ public class DiscordQrAuthClient {
         generateKeys();
 
         pws = new PacketWebsocket(WEBSOCKET_URI, Map.of("Origin", "https://discord.com", "User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0"), this::handlePacket, integer -> {
-            if (integer == 4003) {
-                this.tokenFuture.completeExceptionally(new TimedOutException());
-                try {
-                    close();
-                } catch (Throwable t) {
-                    onError.accept(t);
-                }
+            if (!this.tokenFuture.isDone()) {
+                Throwable failure = integer == 4003
+                        ? new TimedOutException()
+                        : new IOException("Discord remote authentication connection closed (" + integer + ")");
+                this.codeFuture.completeExceptionally(failure);
+                this.tokenFuture.completeExceptionally(failure);
             }
+            try {
+                close();
+            } catch (Throwable t) {
+                onError.accept(t);
+            }
+        }, throwable -> {
+            this.codeFuture.completeExceptionally(throwable);
+            this.tokenFuture.completeExceptionally(throwable);
+            onError.accept(throwable);
         });
     }
 
@@ -117,11 +126,13 @@ public class DiscordQrAuthClient {
      *
      * @throws InterruptedException If the connection attempt is interrupted
      */
-    public void start() throws InterruptedException {
+    public void start() throws InterruptedException, IOException {
         if (stop.get()) {
             throw new IllegalStateException("Already closed");
         }
-        pws.connectBlocking();
+        if (!pws.connectBlocking(10, TimeUnit.SECONDS)) {
+            throw new IOException("Timed out connecting to Discord remote authentication");
+        }
     }
 
     private void generateKeys() throws Exception {
@@ -159,7 +170,6 @@ public class DiscordQrAuthClient {
     }
 
     private void handlePacket(Packet packet) {
-        System.out.println("IN " + packet);
         switch (packet.op) {
             case "hello" -> {
                 long interv = packet.data.get("heartbeat_interval").getAsLong();
@@ -200,7 +210,6 @@ public class DiscordQrAuthClient {
                 try {
                     String ticket = packet.data.get("ticket").getAsString();
                     String token = decryptAndExchangeToken(ticket);
-                    System.out.println("Decrypted token: "+token);
                     this.tokenFuture.complete(token);
                     close();
                 } catch (Throwable e) {
@@ -240,11 +249,9 @@ public class DiscordQrAuthClient {
                 throw new IOException("Unexpected code " + response);
             }
             String responseBody = response.body().string();
-            System.out.println("response body is: " + responseBody);
             Structs.EncryptedTokenResponse encryptedTokenResponse = gson.fromJson(responseBody, Structs.EncryptedTokenResponse.class);
             byte[] bytes = decryptUsingKey(Base64.getDecoder().decode(encryptedTokenResponse.encryptedToken));
             String tkn = new String(bytes);
-            System.out.println("decrypted token is: " + tkn);
             return tkn;
         }
     }
@@ -262,7 +269,7 @@ public class DiscordQrAuthClient {
         }
     }
 
-    private void close() {
+    public void close() {
         stop.set(true);
         pws.close();
         if (intervalRunner != null) {

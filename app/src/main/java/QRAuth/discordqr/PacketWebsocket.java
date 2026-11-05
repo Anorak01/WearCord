@@ -12,11 +12,13 @@ import java.util.function.Consumer;
 class PacketWebsocket extends WebSocketClient {
     Consumer<Packet> onPacket;
     Consumer<Integer> onClosed;
+    Consumer<Exception> onError;
 
-    public PacketWebsocket(URI uri, Map<String, String> headers, Consumer<Packet> onPacket, Consumer<Integer> onClosed) {
+    public PacketWebsocket(URI uri, Map<String, String> headers, Consumer<Packet> onPacket, Consumer<Integer> onClosed, Consumer<Exception> onError) {
         super(uri, headers);
         this.onPacket = onPacket;
         this.onClosed = onClosed;
+        this.onError = onError;
     }
 
     @Override
@@ -25,7 +27,6 @@ class PacketWebsocket extends WebSocketClient {
 
     @Override
     public void send(String text) {
-        System.out.println("OUT " + text);
         super.send(text);
     }
 
@@ -37,7 +38,7 @@ class PacketWebsocket extends WebSocketClient {
 
     @Override
     public void onError(Exception ex) {
-        ex.printStackTrace();
+        onError.accept(ex);
     }
 
     @Override

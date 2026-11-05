@@ -1,7 +1,6 @@
 package top.anorak01.wearcord.presentation.screens.login
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,69 +18,60 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.wear.compose.material.Button
-import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import top.anorak01.wearcord.presentation.components.RequestError
 import top.anorak01.wearcord.presentation.login.send2FA
+import top.anorak01.wearcord.presentation.me
+import top.anorak01.wearcord.presentation.network.ApiResult
 import top.anorak01.wearcord.presentation.saveToken
 
 @Composable
 fun MFAScreen(navController: NavHostController, ticket: String) {
     val scope = rememberCoroutineScope()
-    var new2FAText by remember { mutableStateOf("") }
-
-
     val context = LocalContext.current
+    var code by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { // bounding box
-        Column(
-            modifier = Modifier.fillMaxSize(0.8f),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { // column for text entries and login button below
-            // code entry
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colors.background) // Add a background to overlay content
-                    .padding(horizontal = 16.dp, vertical = 3.dp)
-            ) {
-                TextField( // Using OutlinedTextField for better visibility on Wear
-                    value = new2FAText,
-                    onValueChange = { new2FAText = it },
-                    label = { Text("2FA Code") },
-                    maxLines = 1 // Allow for multi-line input
-                )
+    fun submitCode() {
+        if (isLoading || code.isBlank()) return
+        scope.launch {
+            isLoading = true
+            failure = null
+            when (val result = send2FA(ticket, code)) {
+                is ApiResult.Success -> {
+                    saveToken(context, result.data)
+                    me = null
+                    code = ""
+                    navController.popBackStack("home", false)
+                }
+                is ApiResult.Failure -> failure = result
             }
+            isLoading = false
+        }
+    }
 
-            // login button
-            Button(
-                onClick = {
-                    if (new2FAText.isNotBlank()) {
-                        scope.launch(Dispatchers.Main) {
-                            var token: String? = null
-                            withContext(Dispatchers.IO) {
-                                token = send2FA(
-                                    ticket,
-                                    new2FAText
-                                ) // sendLogin automatically sets the user token if successful
-                            }
-                            if (token != null && token.isNotBlank()) {
-                                saveToken(context, token)
-                                navController.clearBackStack("home")
-                                new2FAText = ""
-                            }
-
-                        }
-
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-                enabled = new2FAText.isNotBlank() // Disable button if text is empty
-            ) {
-                Text("Confirm")
-            }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        TextField(
+            value = code,
+            onValueChange = { code = it },
+            label = { Text("2FA Code") },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            enabled = !isLoading,
+        )
+        failure?.let { RequestError(failure = it, onRetry = ::submitCode) }
+        Button(
+            onClick = ::submitCode,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && code.isNotBlank(),
+        ) {
+            Text(if (isLoading) "Checking…" else "Confirm")
         }
     }
 }
