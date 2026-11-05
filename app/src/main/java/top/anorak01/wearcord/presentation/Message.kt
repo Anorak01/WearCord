@@ -45,6 +45,12 @@ data class Channel(
     val last_message_id: String? = null, // for dms
 )
 
+data class ChannelGroup(
+    val id: String?,
+    val name: String?,
+    val channels: List<Channel>,
+)
+
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
 data class Author(

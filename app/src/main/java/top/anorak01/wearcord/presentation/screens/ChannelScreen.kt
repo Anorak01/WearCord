@@ -1,49 +1,36 @@
 package top.anorak01.wearcord.presentation.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumnDefaults
-import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
-import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.Chip
+import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import kotlinx.coroutines.launch
-import top.anorak01.wearcord.presentation.Channel
+import top.anorak01.wearcord.presentation.ChannelGroup
+import top.anorak01.wearcord.presentation.components.ActionChip
+import top.anorak01.wearcord.presentation.components.EmptyState
+import top.anorak01.wearcord.presentation.components.LoadingState
 import top.anorak01.wearcord.presentation.components.RequestError
+import top.anorak01.wearcord.presentation.components.ScreenHeader
+import top.anorak01.wearcord.presentation.components.WearListScaffold
 import top.anorak01.wearcord.presentation.fetchers.fetchGuildChannels
 import top.anorak01.wearcord.presentation.network.ApiResult
 
 @Composable
 fun ChannelScreen(navController: NavHostController, guildId: String) {
-    val scope = rememberCoroutineScope()
-    val channels = remember { mutableStateMapOf<String, List<Channel>>() }
+    val groups = remember { mutableStateListOf<ChannelGroup>() }
     val listState = rememberScalingLazyListState()
     var isLoading by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
@@ -54,84 +41,54 @@ fun ChannelScreen(navController: NavHostController, guildId: String) {
         failure = null
         when (val result = fetchGuildChannels(guildId)) {
             is ApiResult.Success -> {
-                channels.clear()
-                channels.putAll(result.data)
+                groups.clear()
+                groups.addAll(result.data)
             }
             is ApiResult.Failure -> failure = result
         }
         isLoading = false
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colors.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            reverseLayout = false,
-            scalingParams = ScalingLazyColumnDefaults.scalingParams(
-                edgeScale = 0.5f,
-                edgeAlpha = 0.5f,
-                minTransitionArea = 0.4f,
-            ),
-            contentPadding = PaddingValues(vertical = 70.dp),
-        ) {
-            if (isLoading && channels.isEmpty()) item { Text("Loading channels…") }
-            failure?.let { error ->
-                item(key = "request_error") {
-                    RequestError(failure = error, onRetry = { refreshCount++ })
+    WearListScaffold(listState = listState) {
+        item { ScreenHeader("Channels") }
+        if (isLoading && groups.isEmpty()) item { LoadingState("Loading channels…") }
+        failure?.let { error ->
+            item(key = "request_error") {
+                RequestError(failure = error, onRetry = { refreshCount++ })
+            }
+        }
+        if (!isLoading && groups.isEmpty() && failure == null) {
+            item { EmptyState("No channels", "No channels are visible to this account.") }
+        }
+        groups.forEach { group ->
+            group.name?.let { name ->
+                item(key = "category_${group.id}") {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.caption1,
+                        color = MaterialTheme.colors.onSurfaceVariant,
+                    )
                 }
             }
-            if (!isLoading && channels.isEmpty() && failure == null) item { Text("No channels found") }
-            items(channels.keys.toList(), key = { it }) { parentChannel ->
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Gray)
-                        .padding(horizontal = 4.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(
+            group.channels.forEach { channel ->
+                item(key = channel.id) {
+                    Chip(
+                        onClick = { navController.navigate("messages/${channel.id}") },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        channels[parentChannel]?.forEach { channel ->
-                            Text(
-                                text = channel.name ?: "Channel",
-                                color = Color.White,
-                                modifier = Modifier
-                                    .padding(2.dp)
-                                    .background(Color.DarkGray)
-                                    .clickable { navController.navigate("messages/${channel.id}") },
-                                textAlign = TextAlign.Center,
-                                fontSize = 14.sp,
-                            )
-                        }
-                    }
+                        colors = ChipDefaults.primaryChipColors(),
+                        label = { Text(channel.name ?: "Channel", maxLines = 2) },
+                        secondaryLabel = { Text("Open channel") },
+                    )
                 }
             }
         }
-    }
-    Box(
-        contentAlignment = Alignment.TopCenter,
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-    ) {
-        Button(
-            onClick = { refreshCount++ },
-            content = { Text("R") },
-            modifier = Modifier.fillMaxSize(0.15f),
-            enabled = !isLoading,
-        )
-    }
-    Box(
-        contentAlignment = Alignment.BottomCenter,
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-    ) {
-        Button(
-            onClick = { scope.launch { listState.animateScrollToItem(0, 1) } },
-            content = { Text("D") },
-            modifier = Modifier.fillMaxSize(0.15f),
-        )
+        item {
+            ActionChip(
+                label = if (isLoading) "Refreshing…" else "Refresh channels",
+                icon = Icons.Default.Refresh,
+                enabled = !isLoading,
+                onClick = { refreshCount++ },
+            )
+        }
     }
 }

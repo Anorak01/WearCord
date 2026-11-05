@@ -23,6 +23,7 @@ suspend fun jumpToMessage(
     messageID: String,
     listState: ScalingLazyListState,
     messageList: SnapshotStateList<Message>,
+    listItemOffset: Int = 0,
 ): Boolean {
     var message = messageList.isMessageInList(messageID)
     var remainingRequests = 50
@@ -47,7 +48,7 @@ suspend fun jumpToMessage(
     }
 
     if (message == null) return false
-    listState.animateScrollToItem(messageList.getMessageIndex(message))
+    listState.animateScrollToItem(messageList.getMessageIndex(message) + listItemOffset)
     return true
 }
 

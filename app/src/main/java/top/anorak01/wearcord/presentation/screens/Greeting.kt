@@ -1,10 +1,9 @@
 package top.anorak01.wearcord.presentation.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -12,14 +11,16 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.MaterialTheme
-import androidx.wear.compose.material.SwipeToDismissBox
 import androidx.wear.compose.material.Text
+import top.anorak01.wearcord.presentation.components.ActionChip
+import top.anorak01.wearcord.presentation.components.LoadingState
 import top.anorak01.wearcord.presentation.components.RequestError
+import top.anorak01.wearcord.presentation.components.ScreenHeader
+import top.anorak01.wearcord.presentation.components.SurfaceCard
+import top.anorak01.wearcord.presentation.components.WearListScaffold
 import top.anorak01.wearcord.presentation.fetchers.fetchMe
 import top.anorak01.wearcord.presentation.me
 import top.anorak01.wearcord.presentation.network.ApiResult
@@ -27,68 +28,80 @@ import top.anorak01.wearcord.presentation.userToken
 
 @Composable
 fun Greeting(navController: NavHostController) {
-    var displayName by remember { mutableStateOf(me?.global_name ?: me?.username.orEmpty()) }
+    val listState = rememberScalingLazyListState()
     var isLoading by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(retryCount) {
-        val currentUser = me
-        if (currentUser != null) {
-            displayName = currentUser.global_name ?: currentUser.username
-            return@LaunchedEffect
-        }
-        if (userToken.isNullOrBlank()) {
-            navController.navigate("qr") { launchSingleTop = true }
-            return@LaunchedEffect
-        }
-
+        if (me != null || userToken.isNullOrBlank()) return@LaunchedEffect
         isLoading = true
         failure = null
         when (val result = fetchMe()) {
-            is ApiResult.Success -> {
-                me = result.data
-                displayName = result.data.global_name ?: result.data.username
-            }
-            is ApiResult.Failure -> {
-                if (result.reason == ApiResult.Reason.UNAUTHORIZED) {
-                    navController.navigate("qr") { launchSingleTop = true }
-                } else {
-                    // Connectivity/server failures are retryable and must not log the user out.
-                    failure = result
-                }
-            }
+            is ApiResult.Success -> me = result.data
+            is ApiResult.Failure -> failure = result
         }
         isLoading = false
     }
 
-    SwipeToDismissBox(onDismissed = {}, modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colors.primary,
-                text = "Welcome to WearCord",
-            )
-            if (displayName.isNotBlank()) {
-                Text(
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    text = displayName,
+    WearListScaffold(listState = listState) {
+        item { ScreenHeader("WearCord") }
+        item {
+            when {
+                isLoading -> LoadingState("Connecting to Discord…")
+                me != null -> SurfaceCard {
+                    Text("Signed in", style = MaterialTheme.typography.caption1)
+                    Text(
+                        me?.global_name ?: me?.username.orEmpty(),
+                        style = MaterialTheme.typography.title3,
+                    )
+                }
+                userToken.isNullOrBlank() -> SurfaceCard {
+                    Text("Welcome", style = MaterialTheme.typography.title3)
+                    Text(
+                        "Choose a sign-in method to get started.",
+                        style = MaterialTheme.typography.body2,
+                        color = MaterialTheme.colors.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        failure?.let { error ->
+            item(key = "request_error") {
+                RequestError(failure = error, onRetry = { retryCount++ })
+            }
+        }
+        if (userToken.isNullOrBlank()) {
+            item {
+                ActionChip(
+                    label = "Sign in to Discord",
+                    secondaryLabel = "QR code, password, or token",
+                    icon = Icons.Default.Person,
+                    onClick = { navController.navigate("login-options") },
                 )
             }
-            if (isLoading) {
-                Text(
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    text = "Connecting to Discord…",
+        } else {
+            item {
+                ActionChip(
+                    label = "Direct messages",
+                    icon = Icons.Default.Email,
+                    onClick = { navController.navigate("dms") },
                 )
             }
-            failure?.let {
-                RequestError(failure = it, onRetry = { retryCount++ })
+            item {
+                ActionChip(
+                    label = "Servers",
+                    icon = Icons.AutoMirrored.Filled.List,
+                    onClick = { navController.navigate("guilds") },
+                )
+            }
+            item {
+                ActionChip(
+                    label = "Account & sign-in",
+                    secondaryLabel = "Switch account or sign in again",
+                    icon = Icons.Default.Person,
+                    onClick = { navController.navigate("login-options") },
+                )
             }
         }
     }

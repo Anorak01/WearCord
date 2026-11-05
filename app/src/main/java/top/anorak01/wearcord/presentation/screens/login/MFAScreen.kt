@@ -1,26 +1,26 @@
 package top.anorak01.wearcord.presentation.screens.login
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.TextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.navigation.NavHostController
-import androidx.wear.compose.material.Button
-import androidx.wear.compose.material.Text
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import kotlinx.coroutines.launch
+import top.anorak01.wearcord.presentation.components.ActionChip
 import top.anorak01.wearcord.presentation.components.RequestError
+import top.anorak01.wearcord.presentation.components.ScreenHeader
+import top.anorak01.wearcord.presentation.components.WearListScaffold
+import top.anorak01.wearcord.presentation.components.WearTextField
 import top.anorak01.wearcord.presentation.login.send2FA
 import top.anorak01.wearcord.presentation.me
 import top.anorak01.wearcord.presentation.network.ApiResult
@@ -30,6 +30,7 @@ import top.anorak01.wearcord.presentation.saveToken
 fun MFAScreen(navController: NavHostController, ticket: String) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val listState = rememberScalingLazyListState()
     var code by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<ApiResult.Failure?>(null) }
@@ -52,26 +53,37 @@ fun MFAScreen(navController: NavHostController, ticket: String) {
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        TextField(
-            value = code,
-            onValueChange = { code = it },
-            label = { Text("2FA Code") },
-            modifier = Modifier.fillMaxWidth(),
-            maxLines = 1,
-            enabled = !isLoading,
-        )
-        failure?.let { RequestError(failure = it, onRetry = ::submitCode) }
-        Button(
-            onClick = ::submitCode,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isLoading && code.isNotBlank(),
-        ) {
-            Text(if (isLoading) "Checking…" else "Confirm")
+    WearListScaffold(listState = listState) {
+        item { ScreenHeader("Two-factor login") }
+        item {
+            WearTextField(
+                value = code,
+                onValueChange = {
+                    if (it.length <= 10) {
+                        code = it.filter(Char::isDigit)
+                        failure = null
+                    }
+                },
+                label = "Authentication code",
+                placeholder = "6-digit code",
+                enabled = !isLoading,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.NumberPassword,
+                    imeAction = ImeAction.Go,
+                ),
+                keyboardActions = KeyboardActions(onGo = { submitCode() }),
+            )
+        }
+        failure?.let { error ->
+            item { RequestError(failure = error, onRetry = ::submitCode) }
+        }
+        item {
+            ActionChip(
+                label = if (isLoading) "Checking…" else "Confirm code",
+                icon = Icons.Default.Check,
+                enabled = !isLoading && code.length == 6,
+                onClick = ::submitCode,
+            )
         }
     }
 }

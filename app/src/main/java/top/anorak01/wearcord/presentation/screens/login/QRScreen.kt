@@ -2,14 +2,12 @@ package top.anorak01.wearcord.presentation.screens.login
 
 import QRAuth.discordqr.DiscordQrAuthClient
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,23 +16,28 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import androidx.wear.compose.material.Button
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import top.anorak01.wearcord.presentation.components.ActionChip
+import top.anorak01.wearcord.presentation.components.LoadingState
 import top.anorak01.wearcord.presentation.components.RequestError
+import top.anorak01.wearcord.presentation.components.ScreenHeader
+import top.anorak01.wearcord.presentation.components.SurfaceCard
+import top.anorak01.wearcord.presentation.components.WearListScaffold
 import top.anorak01.wearcord.presentation.login.generateQrCodeBitmap
 import top.anorak01.wearcord.presentation.me
 import top.anorak01.wearcord.presentation.network.ApiResult
@@ -48,6 +51,7 @@ import kotlin.coroutines.resumeWithException
 @Composable
 fun QRScreen(navController: NavHostController) {
     val context = LocalContext.current
+    val listState = rememberScalingLazyListState()
     var state by remember { mutableStateOf(QRState.Start) }
     var qrUrl by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
@@ -58,7 +62,6 @@ fun QRScreen(navController: NavHostController) {
         state = QRState.Start
         errorMessage = ""
         authClient?.close()
-
         try {
             val client = withContext(Dispatchers.IO) {
                 DiscordQrAuthClient(Consumer { _: Throwable? -> })
@@ -82,54 +85,63 @@ fun QRScreen(navController: NavHostController) {
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            errorMessage = "Could not start QR login. Check your connection and retry."
+            errorMessage = "QR login couldn’t connect. Check your connection and try again."
             state = QRState.Error
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { authClient?.close() }
-    }
+    DisposableEffect(Unit) { onDispose { authClient?.close() } }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
+    WearListScaffold(listState = listState) {
+        item { ScreenHeader("QR login") }
         when (state) {
             QRState.Start -> {
-                Text("Waiting for QR code", textAlign = TextAlign.Center)
-                Button(onClick = { navController.navigate("manualtoken") }) {
-                    Text("Use token")
-                }
+                item { LoadingState("Preparing a secure QR code…") }
             }
             QRState.QRScan -> {
-                Text("Please scan QR code", textAlign = TextAlign.Center)
-                val bitmap = remember(qrUrl) { generateQrCodeBitmap(qrUrl) }
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Discord login QR code",
-                        modifier = Modifier.fillMaxSize(0.5f)
-                            .clip(RoundedCornerShape(CornerSize(6.dp))),
-                        contentScale = ContentScale.Fit,
-                    )
-                } else {
-                    Text("Could not generate QR code")
+                item {
+                    SurfaceCard {
+                        Text("Continue on your phone", style = MaterialTheme.typography.title3)
+                        Text(
+                            "Open Discord’s QR scanner, scan this code, then approve login on your phone.",
+                            style = MaterialTheme.typography.body2,
+                            color = MaterialTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                }
+                item {
+                    val bitmap = remember(qrUrl) { generateQrCodeBitmap(qrUrl, 384, 384) }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Discord login QR code",
+                            modifier = Modifier
+                                .size(172.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White)
+                                .padding(10.dp),
+                            contentScale = ContentScale.Fit,
+                        )
+                    } else {
+                        Text("Couldn’t generate the QR code", color = MaterialTheme.colors.error)
+                    }
                 }
             }
             QRState.Error -> {
-                RequestError(
-                    failure = ApiResult.Failure(ApiResult.Reason.NETWORK, errorMessage),
-                    onRetry = { retryCount++ },
-                )
-                Button(
-                    onClick = { navController.navigate("manualtoken") },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Use token instead")
+                item {
+                    RequestError(
+                        failure = ApiResult.Failure(ApiResult.Reason.NETWORK, errorMessage),
+                        onRetry = { retryCount++ },
+                    )
                 }
             }
+        }
+        item {
+            ActionChip(
+                label = "Use a token instead",
+                icon = Icons.Default.Lock,
+                onClick = { navController.navigate("manualtoken") },
+            )
         }
     }
 }

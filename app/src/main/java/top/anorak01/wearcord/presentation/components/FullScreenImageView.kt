@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -76,14 +76,14 @@ fun FullScreenImageView(
                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
                     )
             )
-            IconButton(
+            Button(
                 onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopCenter)
+                modifier = Modifier.align(Alignment.TopCenter),
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Close full screen image view",
-                    tint = Color.White
+                    contentDescription = "Close image",
+                    tint = Color.White,
                 )
             }
         }

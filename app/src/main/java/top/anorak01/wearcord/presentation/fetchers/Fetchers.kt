@@ -1,6 +1,7 @@
 package top.anorak01.wearcord.presentation.fetchers
 
 import top.anorak01.wearcord.presentation.Channel
+import top.anorak01.wearcord.presentation.ChannelGroup
 import top.anorak01.wearcord.presentation.Guild
 import top.anorak01.wearcord.presentation.Me
 import top.anorak01.wearcord.presentation.Message
@@ -30,25 +31,43 @@ suspend fun fetchMessages(
 suspend fun fetchGuilds(): ApiResult<List<Guild>> =
     DiscordApi.get("users/@me/guilds", userToken)
 
-suspend fun fetchGuildChannels(guildId: String): ApiResult<Map<String, List<Channel>>> =
+suspend fun fetchGuildChannels(guildId: String): ApiResult<List<ChannelGroup>> =
     when (val result = DiscordApi.get<List<Channel>>("guilds/$guildId/channels", userToken)) {
         is ApiResult.Failure -> result
         is ApiResult.Success -> ApiResult.Success(groupChannels(result.data))
     }
 
-private fun groupChannels(channels: List<Channel>): Map<String, List<Channel>> {
+internal fun groupChannels(channels: List<Channel>): List<ChannelGroup> {
     val sortedChannels = channels.sortedBy { it.position ?: Int.MAX_VALUE }
-    val grouped = linkedMapOf<String, MutableList<Channel>>()
+    val categories = sortedChannels.filter { it.type == CATEGORY_CHANNEL }
+    val uncategorized = sortedChannels.filter { it.parent_id == null && it.type != CATEGORY_CHANNEL }
+    val groups = mutableListOf<ChannelGroup>()
 
-    // Create categories first so children are retained regardless of response order.
-    sortedChannels.filter { it.parent_id == null }.forEach { channel ->
-        grouped[channel.id] = mutableListOf()
+    if (uncategorized.isNotEmpty()) {
+        groups += ChannelGroup(id = null, name = null, channels = uncategorized)
     }
-    sortedChannels.filter { it.parent_id != null }.forEach { channel ->
-        grouped.getOrPut(channel.parent_id!!) { mutableListOf() }.add(channel)
+    categories.forEach { category ->
+        groups += ChannelGroup(
+            id = category.id,
+            name = category.name,
+            channels = sortedChannels.filter { it.parent_id == category.id },
+        )
     }
-    return grouped
+
+    val knownIds = buildSet {
+        groups.forEach { group ->
+            group.id?.let(::add)
+            group.channels.forEach { add(it.id) }
+        }
+    }
+    val orphaned = sortedChannels.filter { it.id !in knownIds && it.type != CATEGORY_CHANNEL }
+    if (orphaned.isNotEmpty()) {
+        groups += ChannelGroup(id = null, name = "Other channels", channels = orphaned)
+    }
+    return groups
 }
+
+private const val CATEGORY_CHANNEL = 4
 
 /** Returns DMs sorted from newest to oldest activity. */
 suspend fun fetchDms(): ApiResult<List<Channel>> =
