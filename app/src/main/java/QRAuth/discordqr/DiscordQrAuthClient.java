@@ -87,11 +87,7 @@ public class DiscordQrAuthClient {
             } catch (Throwable t) {
                 onError.accept(t);
             }
-        }, throwable -> {
-            this.codeFuture.completeExceptionally(throwable);
-            this.tokenFuture.completeExceptionally(throwable);
-            onError.accept(throwable);
-        });
+        }, this::failHandshake);
     }
 
     /**
@@ -130,7 +126,7 @@ public class DiscordQrAuthClient {
         if (stop.get()) {
             throw new IllegalStateException("Already closed");
         }
-        if (!pws.connectBlocking(10, TimeUnit.SECONDS)) {
+        if (!pws.connectBlocking(30, TimeUnit.SECONDS)) {
             throw new IOException("Timed out connecting to Discord remote authentication");
         }
     }
@@ -189,7 +185,7 @@ public class DiscordQrAuthClient {
                     Packet packet1 = new Packet("nonce_proof", Map.of("proof", new JsonPrimitive(j)));
                     pws.send(packet1.toSerialized().toString());
                 } catch (Throwable e) {
-                    error.accept(e);
+                    failHandshake(e);
                 }
             }
             case "pending_remote_init" -> {
@@ -203,7 +199,7 @@ public class DiscordQrAuthClient {
                     DiscordUser du = new DiscordUser(payload[0], payload[2], payload[3], Long.parseLong(payload[1])); // weird order but yes, this is correct
                     codeScanned.complete(du);
                 } catch (Throwable e) {
-                    error.accept(e);
+                    failHandshake(e);
                 }
             }
             case "pending_login" -> {
@@ -213,8 +209,7 @@ public class DiscordQrAuthClient {
                     this.tokenFuture.complete(token);
                     close();
                 } catch (Throwable e) {
-                    this.tokenFuture.complete("");
-                    error.accept(e);
+                    failHandshake(e);
                 }
             }
             case "cancel" -> {
@@ -254,6 +249,12 @@ public class DiscordQrAuthClient {
             String tkn = new String(bytes);
             return tkn;
         }
+    }
+
+    private void failHandshake(Throwable throwable) {
+        this.codeFuture.completeExceptionally(throwable);
+        this.tokenFuture.completeExceptionally(throwable);
+        error.accept(throwable);
     }
 
     private void runInterval(long interval) {
