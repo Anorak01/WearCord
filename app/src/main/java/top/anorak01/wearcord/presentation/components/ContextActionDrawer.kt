@@ -5,7 +5,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,23 +43,18 @@ fun ContextActionDrawer(
             .fillMaxSize()
             .pointerInput(Unit) {
                 val edgeWidth = with(density) { 28.dp.toPx() }
-                val triggerDistance = with(density) { 56.dp.toPx() }
-                var dragDistance = 0f
-                var dragFromRightEdge = false
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
-                        dragDistance = 0f
-                        dragFromRightEdge = offset.x >= size.width - edgeWidth
-                    },
-                    onDragEnd = { dragFromRightEdge = false },
-                    onDragCancel = { dragFromRightEdge = false },
-                ) { change, amount ->
-                    if (dragFromRightEdge && !isOpen) {
-                        dragDistance += amount
-                        change.consume()
-                        if (dragDistance <= -triggerDistance) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    when {
+                        isOpen && down.position.x <= edgeWidth -> {
+                            // Opposite edge/back gesture dismisses only the drawer.
+                            isOpen = false
+                            down.consume()
+                        }
+                        !isOpen && down.position.x >= size.width - edgeWidth -> {
+                            // Open on edge contact; don't wait for touch slop or a completed drag.
                             isOpen = true
-                            dragFromRightEdge = false
+                            down.consume()
                         }
                     }
                 }

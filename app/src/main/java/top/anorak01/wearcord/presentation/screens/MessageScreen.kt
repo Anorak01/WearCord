@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -44,6 +46,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import top.anorak01.wearcord.presentation.Message
 import top.anorak01.wearcord.presentation.RichText
 import top.anorak01.wearcord.presentation.components.ActionChip
@@ -58,6 +61,7 @@ import top.anorak01.wearcord.presentation.components.WearListScaffold
 import top.anorak01.wearcord.presentation.fetchers.fetchMessages
 import top.anorak01.wearcord.presentation.me
 import top.anorak01.wearcord.presentation.message.deleteMessage
+import top.anorak01.wearcord.presentation.message.jumpToLatestMessage
 import top.anorak01.wearcord.presentation.message.jumpToMessage
 import top.anorak01.wearcord.presentation.message.messageComposerStore
 import top.anorak01.wearcord.presentation.network.ApiResult
@@ -92,6 +96,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
     val replyTarget = messageComposerStore.replyFor(channelId)
     val sentRevision = messageComposerStore.sentRevision(channelId)
     val composerSpace = if (replyTarget == null) 92.dp else 156.dp
+    val composerSpacePx = with(LocalDensity.current) { composerSpace.toPx().roundToInt() }
 
     LaunchedEffect(channelId, refreshCount, sentRevision) {
         isRefreshing = true
@@ -156,7 +161,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
     ContextActionDrawer(
         title = "Message options",
         "Reload messages" to { refreshCount++ },
-        "Jump to latest" to { scope.launch { listState.animateScrollToItem(0) } },
+        "Jump to latest" to { scope.launch { jumpToLatestMessage(listState, composerSpacePx) } },
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             WearListScaffold(
@@ -212,7 +217,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
 
             if (isScrolledUp) {
                 CompactChip(
-                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    onClick = { scope.launch { jumpToLatestMessage(listState, composerSpacePx) } },
                     label = { Text("↓ Latest") },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -241,17 +246,24 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                         maxLines = 2,
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ActionChip(
-                        label = if (replyTarget == null) "Write a message" else "Write a reply",
-                        icon = Icons.AutoMirrored.Filled.Send,
-                        modifier = Modifier.weight(1f),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Button(
                         onClick = { navController.navigate("compose/$channelId") },
-                    )
+                        modifier = Modifier.size(56.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = if (replyTarget == null) "Write a message" else "Write a reply",
+                        )
+                    }
                     if (replyTarget != null) {
                         Button(
                             onClick = { messageComposerStore.cancelReply(channelId) },
-                            modifier = Modifier.size(52.dp),
+                            modifier = Modifier.size(56.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -269,8 +281,9 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
             onDismissRequest = { if (!isDeleting) actionMessage = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            val actionListState = rememberScalingLazyListState()
-            WearListScaffold(listState = actionListState) {
+            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colors.background)) {
+                val actionListState = rememberScalingLazyListState()
+                WearListScaffold(listState = actionListState) {
                 item { ScreenHeader("Message actions") }
                 item {
                     SurfaceCard {
@@ -318,6 +331,7 @@ fun MessageScreen(navController: NavHostController, channelId: String) {
                         enabled = !isDeleting,
                         onClick = { actionMessage = null },
                     )
+                }
                 }
             }
         }
