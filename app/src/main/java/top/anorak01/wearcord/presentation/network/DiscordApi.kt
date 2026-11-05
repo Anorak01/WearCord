@@ -92,6 +92,19 @@ object DiscordApi {
         body: JsonObject,
     ): ApiResult<T> = executeAndDecode(jsonRequest(path, body).build())
 
+    suspend fun delete(path: String, token: String?): ApiResult<Unit> {
+        if (token.isNullOrBlank()) return missingToken()
+        val request = Request.Builder()
+            .url(baseUrl.newBuilder().addPathSegments(path.trim('/')).build())
+            .header("Authorization", token)
+            .delete()
+            .build()
+        return when (val result = execute(request, allowEmptyResponse = true)) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> ApiResult.Success(Unit)
+        }
+    }
+
     @PublishedApi
     internal fun jsonRequest(path: String, body: JsonObject): Request.Builder =
         Request.Builder()
@@ -122,7 +135,7 @@ object DiscordApi {
     }
 
     @PublishedApi
-    internal suspend fun execute(request: Request): ApiResult<String> = withContext(Dispatchers.IO) {
+    internal suspend fun execute(request: Request, allowEmptyResponse: Boolean = false): ApiResult<String> = withContext(Dispatchers.IO) {
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
@@ -130,7 +143,7 @@ object DiscordApi {
                 }
 
                 val body = response.body.string()
-                if (body.isBlank()) invalidResponse() else ApiResult.Success(body)
+                if (body.isBlank() && !allowEmptyResponse) invalidResponse() else ApiResult.Success(body)
             }
         } catch (error: CancellationException) {
             throw error

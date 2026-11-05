@@ -79,6 +79,16 @@ data class Me(
     val global_name: String?,
 )
 
+@Serializable
+data class UserSettingsProto(
+    val settings: String,
+)
+
+@Serializable
+data class LegacyUserSettings(
+    val guild_positions: List<String>? = null,
+)
+
 @SuppressLint("UnsafeOptInUsageError")
 @Serializable
 data class LoginReply(

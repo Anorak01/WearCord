@@ -3,8 +3,10 @@ package top.anorak01.wearcord.presentation.fetchers
 import top.anorak01.wearcord.presentation.Channel
 import top.anorak01.wearcord.presentation.ChannelGroup
 import top.anorak01.wearcord.presentation.Guild
+import top.anorak01.wearcord.presentation.LegacyUserSettings
 import top.anorak01.wearcord.presentation.Me
 import top.anorak01.wearcord.presentation.Message
+import top.anorak01.wearcord.presentation.UserSettingsProto
 import top.anorak01.wearcord.presentation.network.ApiResult
 import top.anorak01.wearcord.presentation.network.DiscordApi
 import top.anorak01.wearcord.presentation.userToken
@@ -30,6 +32,18 @@ suspend fun fetchMessages(
 
 suspend fun fetchGuilds(): ApiResult<List<Guild>> =
     DiscordApi.get("users/@me/guilds", userToken)
+
+/** Returns empty when settings are unavailable; the REST guild order is then preserved. */
+suspend fun fetchGuildPositions(): List<String> {
+    when (val proto = DiscordApi.get<UserSettingsProto>("users/@me/settings-proto/1", userToken)) {
+        is ApiResult.Success -> return GuildPositionsDecoder.decode(proto.data.settings)
+        is ApiResult.Failure -> Unit
+    }
+    return when (val legacy = DiscordApi.get<LegacyUserSettings>("users/@me/settings", userToken)) {
+        is ApiResult.Success -> legacy.data.guild_positions.orEmpty()
+        is ApiResult.Failure -> emptyList()
+    }
+}
 
 suspend fun fetchGuildChannels(guildId: String): ApiResult<List<ChannelGroup>> =
     when (val result = DiscordApi.get<List<Channel>>("guilds/$guildId/channels", userToken)) {

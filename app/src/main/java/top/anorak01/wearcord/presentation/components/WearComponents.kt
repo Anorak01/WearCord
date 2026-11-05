@@ -42,6 +42,7 @@ fun WearListScaffold(
     listState: ScalingLazyListState,
     modifier: Modifier = Modifier,
     reverseLayout: Boolean = false,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 8.dp, vertical = 28.dp),
     content: ScalingLazyListScope.() -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -62,7 +63,7 @@ fun WearListScaffold(
             state = listState,
             reverseLayout = reverseLayout,
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 28.dp),
+            contentPadding = contentPadding,
             scalingParams = ScalingLazyColumnDefaults.scalingParams(
                 edgeScale = 0.6f,
                 edgeAlpha = 0.65f,

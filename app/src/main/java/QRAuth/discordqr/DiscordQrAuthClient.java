@@ -54,6 +54,8 @@ public class DiscordQrAuthClient {
     private static final Gson gson = new Gson();
     private final PacketWebsocket pws;
     private final AtomicBoolean stop = new AtomicBoolean(false);
+    // Discord may close the socket after pending_login while the HTTP token exchange is running.
+    private final AtomicBoolean tokenExchangeStarted = new AtomicBoolean(false);
     private final Consumer<Throwable> error;
     private final CompletableFuture<String> tokenFuture = new CompletableFuture<>();
     private final CompletableFuture<String> codeFuture = new CompletableFuture<>();
@@ -75,7 +77,7 @@ public class DiscordQrAuthClient {
         generateKeys();
 
         pws = new PacketWebsocket(WEBSOCKET_URI, Map.of("Origin", "https://discord.com", "User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0"), this::handlePacket, integer -> {
-            if (!this.tokenFuture.isDone()) {
+            if (!this.tokenFuture.isDone() && !this.tokenExchangeStarted.get()) {
                 Throwable failure = integer == 4003
                         ? new TimedOutException()
                         : new IOException("Discord remote authentication connection closed (" + integer + ")");
@@ -203,6 +205,7 @@ public class DiscordQrAuthClient {
                 }
             }
             case "pending_login" -> {
+                tokenExchangeStarted.set(true);
                 try {
                     String ticket = packet.data.get("ticket").getAsString();
                     String token = decryptAndExchangeToken(ticket);

@@ -12,6 +12,7 @@ import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.tooling.preview.devices.WearDevices
+import top.anorak01.wearcord.presentation.cache.discordListCache
 import top.anorak01.wearcord.presentation.screens.ChannelScreen
 import top.anorak01.wearcord.presentation.screens.ComposeMessageScreen
 import top.anorak01.wearcord.presentation.screens.DMScreen
@@ -78,6 +79,7 @@ fun WearApp() {
 }
 
 fun saveToken(context: Context, token: String) {
+    if (userToken != token) discordListCache.clear()
     userToken = token
     context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE)
         .edit { putString("user_token", token) }

@@ -64,6 +64,22 @@ class DiscordApiTest {
     }
 
     @Test
+    fun emptyResponseCanBeAcceptedForDeleteRequests() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(response(204, ""))
+            server.start()
+
+            val result = DiscordApi.execute(
+                Request.Builder().url(server.url("/")).build(),
+                allowEmptyResponse = true,
+            )
+
+            val success = result as ApiResult.Success
+            assertEquals("", success.data)
+        }
+    }
+
+    @Test
     fun validJsonIsDecodedAndUnknownFieldsAreIgnored() {
         val result = DiscordApi.decode<Me>(
             """{"id":"1","username":"watch","avatar":null,"global_name":"Watch User","extra":true}""",
